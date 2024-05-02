@@ -1,11 +1,9 @@
 dash==2.6.2
 dash_bootstrap_components
-math
 scipy
 numpy
 random
 networkx
 plotly
-re
 pandas
 gunicorn
