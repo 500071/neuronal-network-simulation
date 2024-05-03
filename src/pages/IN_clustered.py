@@ -10,7 +10,6 @@ import plotly.express as px
 import plotly.graph_objects as go
 import re
 from scipy import signal
-import pandas as pd
 import dash_bootstrap_components as dbc
 
 register_page(
@@ -516,7 +515,7 @@ def update_output(n_clicks, n_clusters, n_neurons, epsilon_clusters, coupling_cl
         p = matrix_input_parser(p_outer, n_clusters)
         seed = matrix_input_parser(seed_outer, n_clusters, integer=True)
 
-        if any(param == "input error" for param in [epsilon, coupling, k, p, seed]):
+        if any(str(param) == "input error" for param in [epsilon, coupling, k, p, seed]):
             return dbc.Alert("Input error!", color="danger")
 
         # MATICE VSECH PROMENNYCH
