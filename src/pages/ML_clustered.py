@@ -501,9 +501,9 @@ def update_output(n_clicks, n_clusters, n_neurons, epsilon_clusters, coupling_cl
         p_clusters = input_parser(p_clusters, n_clusters)
         seed_clusters = input_parser(seed_clusters, n_clusters, integer=True)
 
-        if any(str(param) == "input error" for param in
-               [epsilon_clusters, coupling_clusters, k_clusters, p_clusters, seed_clusters]):
-            return dbc.Alert("Input error!", color="danger")
+        #if any(str(param) == "input error" for param in
+        #       [epsilon_clusters, coupling_clusters, k_clusters, p_clusters, seed_clusters]):
+        #    return dbc.Alert("Input error!", color="danger")
 
         # TROJUHELNIKY
         epsilon = matrix_input_parser(epsilon_outer, n_clusters)
@@ -512,8 +512,8 @@ def update_output(n_clicks, n_clusters, n_neurons, epsilon_clusters, coupling_cl
         p = matrix_input_parser(p_outer, n_clusters)
         seed = matrix_input_parser(seed_outer, n_clusters, integer=True)
 
-        if any(str(param) == "input error" for param in [epsilon, coupling, k, p, seed]):
-            return dbc.Alert("Input error!", color="danger")
+        #if any(str(param) == "input error" for param in [epsilon, coupling, k, p, seed]):
+        #    return dbc.Alert("Input error!", color="danger")
 
         # MATICE VSECH PROMENNYCH
         np.fill_diagonal(epsilon, epsilon_clusters)
@@ -571,7 +571,7 @@ def update_output(n_clicks, n_clusters, n_neurons, epsilon_clusters, coupling_cl
         VK = input_parser(VK, n_clusters)
         VCa = input_parser(VCa, n_clusters)
         VL = input_parser(VL, n_clusters)
-        params = np.array([C, Iext, gK, gCa, gL, VK, VCa, VL])
+        params = [C, Iext, gK, gCa, gL, VK, VCa, VL]
 
         # STIMULUS
 
