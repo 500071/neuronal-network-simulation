@@ -1,6 +1,6 @@
 from dash import html, register_page, dcc  #, callback # If you need callbacks, import it here.
 from dash import Input, Output, callback, State
-from math import pow
+from math import pow, sqrt
 import scipy.integrate as integrate
 import numpy as np
 import random
@@ -217,7 +217,7 @@ def euler_maruyama(sigma_noise, X0, T, dt, n_neurons, n_clusters, K, params, sti
     sigma = []
     for cluster in range(n_clusters):
         for neuron in range(n_neurons):
-            sigma.append(sigma_noise / params[0][cluster][neuron])
+            sigma.append(sigma_noise / sqrt(params[0][cluster][neuron]))
     sigma_noise = sigma + [0] * (d - N_eq)  # sigma_noise + (d-N_eq) nul
 
     X = np.zeros((d, N + 1)) # pocet radku: pocet rovnic interneuronu, pocet sloupcu: pocet kroku+1
@@ -248,7 +248,7 @@ def input_parser(input_string, n, integer=False):
         return res
     for i in range(n):
         res[i] = float(res[i])
-    return res
+    return np.asarray(res)
 
 
 def matrix_input_parser(input_string, n_clusters, integer=False):
@@ -319,8 +319,8 @@ def random_truncnorm(a, b, mu, sigma, n):
 def layout():
     layout = html.Div([
         html.Br(),
-        html.H1("Interneuron simulation - multiple clusters"),
-        "Enter values for individual clusters separated by semicolons. Enter matrices in the form [a;b];[c;d].",
+        html.H1("Interneuron simulation — multiple clusters"),
+        "Enter values for individual clusters separated by semicolons. Enter matrices in the form of [a;b];[c;d].",
         html.Br(),
         ######################################################################
         html.H5("Number of neurons and type of coupling"),
@@ -409,6 +409,10 @@ def layout():
             ], title="external DC current"),
             html.Span(' ', style={'display': 'inline-block', 'width': '10px'}),
             html.Div([
+                "sigma_noise = ", dcc.Input(id='sigma_noise', value=0, type='number', size='5'),
+            ], title="standard deviation of the noise of the external current"),
+            html.Span(' ', style={'display': 'inline-block', 'width': '10px'}),
+            html.Div([
                 "C ∼ TN(",
                 "μ = ", dcc.Input(id='C_mu', value="1; 1", type='text', size='15'),
                 " σ = ", dcc.Input(id='C_sigma', value="0.003; 0.003", type='text', size='15'),
@@ -462,10 +466,11 @@ def layout():
         html.Br(),
 
         ######################################################################
-        html.H5("noise"),
+        html.H5("Periodogram window"),
         html.Div([
-            "sigma_noise = ", dcc.Input(id='sigma_noise', value=0, type='number', size='5'),
-        ], title="standard deviation of the noise"),
+            "from = ", dcc.Input(id='periodogram_a', value=0, type='number', size='5'),
+            " to = ", dcc.Input(id='periodogram_b', value=200, type='number', size='5'),
+        ], title="window for the computation of the periodogram, default is the whole interval"),
         html.Br(),
 
 
@@ -490,13 +495,14 @@ def layout():
      State('gNa', 'value'), State('gK', 'value'), State('VNa', 'value'),State('VK', 'value'), State('st_t0', 'value'), State('st_t0_sigma', 'value'), State('st_t0_a', 'value'),
      State('st_t0_b', 'value'), State('st_tn', 'value'), State('st_A', 'value'), State('st_A_sigma', 'value'),
      State('st_A_a', 'value'), State('st_A_b', 'value'), State('st_r', 'value'), State('st_r_sigma', 'value'),
-     State('st_r_a', 'value'), State('st_r_b', 'value'), State('sigma_noise', 'value')
+     State('st_r_a', 'value'), State('st_r_b', 'value'), State('sigma_noise', 'value'),
+     State('periodogram_a', 'value'), State('periodogram_b', 'value')
      ]
 )
 def update_output(n_clicks, n_clusters, n_neurons, epsilon_clusters, coupling_clusters, p_clusters, k_clusters,
                   seed_clusters, epsilon_outer, coupling_outer, p_outer, k_outer, seed_outer, V0_beg, V0_end,
                   h0_input, n0_input, t0, tn, dt, Iext, C_mu, C_sigma, C_a, C_b, gNa, gK, VNa, VK, st_t0_mu, st_t0_sig, st_t0_a, st_t0_b, st_len, st_A_mu, st_A_sig, st_A_a, st_A_b, st_r_mu, st_r_sig,
-                  st_r_a, st_r_b, sigma_noise):
+                  st_r_a, st_r_b, sigma_noise, periodogram_a, periodogram_b):
     if n_clicks > 0:
         # DIAGONALA
         epsilon_clusters = input_parser(epsilon_clusters, n_clusters)
@@ -558,7 +564,7 @@ def update_output(n_clicks, n_clusters, n_neurons, epsilon_clusters, coupling_cl
                 V0.append(random.uniform(V0_beg[cluster], V0_end[cluster]))
                 h0.append(h0_input[cluster])
                 n0.append(n0_input[cluster])
-        y0 = V0 + h0 + n0
+        y0 = np.asarray(V0 + h0 + n0)
 
         # VOLBA PARAMETRU
         Iext = input_parser(Iext, n_clusters)
@@ -575,7 +581,7 @@ def update_output(n_clicks, n_clusters, n_neurons, epsilon_clusters, coupling_cl
         gK = input_parser(gK, n_clusters)
         VNa = input_parser(VNa, n_clusters)
         VK = input_parser(VK, n_clusters)
-        params = [C, Iext, gNa, gK, VNa, VK]
+        params = np.array([C, Iext, gNa, gK, VNa, VK])
 
         # STIMULUS
 
@@ -657,8 +663,12 @@ def update_output(n_clicks, n_clusters, n_neurons, epsilon_clusters, coupling_cl
         fig_sum.update_yaxes(title_text='V [mV]')
 
         # PERIODOGRAM
-        fs = 1000 * len(Vsum) / tn
-        f, Pxx = signal.periodogram(signal.detrend(Vsum), fs)
+        V_periodogram = []
+        for index in range(len(Vsum)):
+            if periodogram_a <= T[index] <= periodogram_b:
+                V_periodogram.append(Vsum[index])
+        fs = 1000 * len(V_periodogram) / tn
+        f, Pxx = signal.periodogram(signal.detrend(V_periodogram), fs)
         kernel = np.array([1, 1, 1]) / 3  # Define the smoothing kernel
         smoothed_Pxx = np.convolve(Pxx, kernel, mode='same')
         f_smoothed = f[:len(smoothed_Pxx)]
