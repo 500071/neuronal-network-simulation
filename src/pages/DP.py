@@ -8,6 +8,7 @@ from scipy.stats import truncnorm
 import plotly.express as px
 import plotly.graph_objects as go
 from scipy import signal
+from math import sqrt
 
 register_page(
     __name__,
@@ -182,7 +183,7 @@ def euler_maruyama(sigma_noise, X0, T, dt, N_eq, K, params, stimulus):
 
     N = np.floor(T/dt).astype(int) # pocet kroku
     d = len(X0) # pocet rovnic v soustave celkem
-    sigma_noise = [sigma_noise / x for x in params[0]] + [0]*(d-N_eq) # sigma_noise + (d-N_eq) nul
+    sigma_noise = [sigma_noise / x for x in sqrt(params[0])] + [0] * (d - N_eq) # sigma_noise + (d-N_eq) nul
     X = np.zeros((d, N + 1)) # pocet radku: pocet rovnic interneuronu, pocet sloupcu: pocet kroku+1
     X[:, 0] = X0 # prvni sloupec jsou pocatecni podminky
     t = np.arange(0, T+dt, dt)  #cas
