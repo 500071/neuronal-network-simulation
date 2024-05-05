@@ -442,7 +442,7 @@ def layout():
                 " σ = ", dcc.Input(id='C_sigma', value="0.003; 0.003", type='text', size='15'),
                 " [ ", dcc.Input(id='C_a', value="0.91; 0.91", type='text', size='15'),
                 ", ", dcc.Input(id='C_b', value="1.09; 1.09", type='text', size='15'), " ])",
-            ], title="membrane capacitance, random for each neuron"),
+            ], title="membrane capacitance, random from truncated normal distribution with given parameters for each neuron"),
         ], style=dict(display='flex')),
         html.Br(),
         html.Div([
@@ -464,7 +464,7 @@ def layout():
                 " σ = ", dcc.Input(id='st_t0_sigma', value="0; 0", type='text', size='15'),
                 " [ ", dcc.Input(id='st_t0_a', value="0; 0", type='text', size='15'),
                 ", ", dcc.Input(id='st_t0_b', value="0; 0", type='text', size='15'), " ])",
-            ], title="start of the stimulus, random for each neuron"),
+            ], title="start of the stimulus, random from truncated normal distribution with given parameters for each neuron"),
             html.Span(' ', style={'display': 'inline-block', 'width': '10px'}),
             html.Div([
                 "T_st = ", dcc.Input(id='st_tn', value="0; 0", type='text', size='15')
@@ -479,7 +479,7 @@ def layout():
                 " σ = ", dcc.Input(id='st_A_sigma', value="0; 0", type='text', size='10'),
                 " [ ", dcc.Input(id='st_A_a', value="0; 0", type='text', size='10'),
                 ", ", dcc.Input(id='st_A_b', value="0; 0", type='text', size='10'), " ])",
-            ], title="amplitude of the stimulus, random for each neuron"),
+            ], title="amplitude of the stimulus, random from truncated normal distribution with given parameters for each neuron"),
             html.Span(' ', style={'display': 'inline-block', 'width': '10px'}),
             html.Div([
                 "r ∼ TN(",
@@ -487,7 +487,7 @@ def layout():
                 " σ = ", dcc.Input(id='st_r_sigma', value="0; 0", type='text', size='10'),
                 " [ ", dcc.Input(id='st_r_a', value="0; 0", type='text', size='10'),
                 ", ", dcc.Input(id='st_r_b', value="0; 0", type='text', size='10'), " ])",
-            ], title=" damping rate of the stimulus, random for each neuron"),
+            ], title=" damping rate of the stimulus, random from truncated normal distribution with given parameters for each neuron"),
         ], style=dict(display='flex')),
         html.Br(),
 
