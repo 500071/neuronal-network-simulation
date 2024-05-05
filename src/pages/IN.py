@@ -1,6 +1,6 @@
 from dash import html, register_page, dcc  # , callback # If you need callbacks, import it here.
 from dash import Input, Output, callback, State
-from math import pow
+from math import pow, sqrt
 import scipy.integrate as integrate
 import numpy as np
 import random
@@ -161,7 +161,7 @@ def euler_maruyama(sigma_noise, X0, T, dt, N_eq, K, params, stimulus):
 
     N = np.floor(T / dt).astype(int)  # pocet kroku
     d = len(X0)  # pocet rovnic v soustave celkem
-    sigma_noise = [sigma_noise / x for x in params[0]] + [0] * (d - N_eq)  # sigma_noise + (d-N_eq) nul
+    sigma_noise = [sigma_noise / x for x in sqrt(params[0])] + [0] * (d - N_eq)  # sigma_noise + (d-N_eq) nul
     X = np.zeros((d, N + 1))  # pocet radku: pocet rovnic interneuronu, pocet sloupcu: pocet kroku+1
     X[:, 0] = X0  # prvni sloupec jsou pocatecni podminky
     t = np.arange(0, T + dt, dt)  # cas
