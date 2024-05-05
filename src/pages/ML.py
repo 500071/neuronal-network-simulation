@@ -251,12 +251,16 @@ def layout():
             ], title="external DC current"),
             html.Span(' ', style={'display': 'inline-block', 'width': '10px'}),
             html.Div([
+                "sigma_noise = ", dcc.Input(id='sigma_noise', value=0, type='number', size='5'),
+            ], title="standard deviation of the noise"),
+            html.Span(' ', style={'display': 'inline-block', 'width': '10px'}),
+            html.Div([
                 "C ∼ TN(",
                 "μ = ", dcc.Input(id='C_mu', value=1, type='number', size='5'),
                 " σ = ", dcc.Input(id='C_sigma', value=0.001, type='number', size='5'),
                 " [ ", dcc.Input(id='C_a', value=0.95, type='number', size='5'),
                 ", ", dcc.Input(id='C_b', value=1.05, type='number', size='5'), " ])",
-            ], title="membrane capacitance, random for each neuron"),
+            ], title="membrane capacitance, random from truncated normal distribution with given parameters for each neuron"),
         ], style=dict(display='flex')),
         html.Br(),
         html.Div([
@@ -278,7 +282,7 @@ def layout():
                 " σ = ", dcc.Input(id='st_t0_sigma', value=0, type='number', size='5'),
                 " [ ", dcc.Input(id='st_t0_a', value=0, type='number', size='5'),
                 ", ", dcc.Input(id='st_t0_b', value=0, type='number', size='5'), " ])",
-            ], title="start of the stimulus, random for each neuron"),
+            ], title="start of the stimulus, random from truncated normal distribution with given parameters for each neuron"),
             html.Span(' ', style={'display': 'inline-block', 'width': '10px'}),
             html.Div([
                 "T_st = ", dcc.Input(id='st_tn', value=20, type='number', size='5')
@@ -293,7 +297,7 @@ def layout():
                 " σ = ", dcc.Input(id='st_A_sigma', value=0, type='number', size='5'),
                 " [ ", dcc.Input(id='st_A_a', value=0, type='number', size='5'),
                 ", ", dcc.Input(id='st_A_b', value=0, type='number', size='5'), " ])",
-            ], title="amplitude of the stimulus, random for each neuron"),
+            ], title="amplitude of the stimulus,random from truncated normal distribution with given parameters for each neuron"),
             html.Span(' ', style={'display': 'inline-block', 'width': '10px'}),
             html.Div([
                 "r ∼ TN(",
@@ -301,15 +305,16 @@ def layout():
                 " σ = ", dcc.Input(id='st_r_sigma', value=0, type='number', size='5'),
                 " [ ", dcc.Input(id='st_r_a', value=0, type='number', size='5'),
                 ", ", dcc.Input(id='st_r_b', value=0, type='number', size='5'), " ])",
-            ], title=" damping rate of the stimulus, random for each neuron"),
+            ], title=" damping rate of the stimulus, random from truncated normal distribution with given parameters for each neuron"),
         ], style=dict(display='flex')),
         html.Br(),
 
         ######################################################################
-        html.H5("noise"),
+        html.H5("Periodogram window"),
         html.Div([
-            "sigma_noise = ", dcc.Input(id='sigma_noise', value=0, type='number', size='5'),
-        ], title="standard deviation of the noise"),
+            "from = ", dcc.Input(id='periodogram_a', value=0, type='number', size='5'),
+            " to = ", dcc.Input(id='periodogram_b', value=200, type='number', size='5'),
+        ], title="window for the computation of the periodogram, default is the whole interval"),
         html.Br(),
 
         ######################################################################
@@ -332,12 +337,12 @@ def layout():
      State('st_A_b', 'value'), State('st_r', 'value'), State('st_r_sigma', 'value'), State('st_r_a', 'value'),
      State('st_r_b', 'value'), State('C_mu', 'value'), State('C_sigma', 'value'), State('C_a', 'value'),
      State('C_b', 'value'), State('gK', 'value'), State('gCa', 'value'), State('gL', 'value'), State('VK', 'value'),
-     State('VCa', 'value'), State('VL', 'value'), State('sigma_noise', 'value'),
+     State('VCa', 'value'), State('VL', 'value'), State('sigma_noise', 'value'), State('periodogram_a', 'value'), State('periodogram_b', 'value')
      ]
 )
 def update_output_ML(n_clicks, n, epsilon, coupling_type, p, k, seed, V0_beg, V0_end, w0_init, t0, tn, dt, Iext,
                      st_t0_mu, st_t0_sig, st_t0_a, st_t0_b, st_len, st_A_mu, st_A_sig, st_A_a, st_A_b, st_r_mu,
-                     st_r_sig, st_r_a, st_r_b, C_mu, C_sigma, C_a, C_b, gK, gCa, gL, VK, VCa, VL, sigma_noise):
+                     st_r_sig, st_r_a, st_r_b, C_mu, C_sigma, C_a, C_b, gK, gCa, gL, VK, VCa, VL, sigma_noise, periodogram_a, periodogram_b):
     if n_clicks > 0:
         # GENEROVANI MATICE K
         if coupling_type == 'all to all':
@@ -407,9 +412,13 @@ def update_output_ML(n_clicks, n, epsilon, coupling_type, p, k, seed, V0_beg, V0
         fig_sum.update_yaxes(title_text='V [mV]')
 
         # PERIODOGRAM
-        fs = 1000 * len(Vsum) / tn
-        f, Pxx = signal.periodogram(signal.detrend(Vsum), fs)
-        kernel = np.array([1, 1, 1]) / 3  # Define the smoothing kernel
+        V_periodogram = []
+        for index in range(len(Vsum)):
+            if periodogram_a <= T[index] <= periodogram_b:
+                V_periodogram.append(Vsum[index])
+        fs = 1000 * len(V_periodogram) / tn
+        f, Pxx = signal.periodogram(signal.detrend(V_periodogram), fs)
+        kernel = np.array([1, 1, 1]) / 3
         smoothed_Pxx = np.convolve(Pxx, kernel, mode='same')
         f_smoothed = f[:len(smoothed_Pxx)]
         limit = 2000
