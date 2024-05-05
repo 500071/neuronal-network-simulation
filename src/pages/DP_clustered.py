@@ -348,7 +348,7 @@ def layout():
         html.H5("Number of neurons and type of coupling"),
         html.Div([
             "n_clusters = ", dcc.Input(id='n_clusters', value=2.0, type='number', size='8'), " ",
-            "n_neurons = ", dcc.Input(id='n_neurons', value=25.0, type='number', size='8'), " ",
+            "n_neurons = ", dcc.Input(id='n_neurons', value=3.0, type='number', size='8'), " ",
         ], title="number of clusters and number of neurons in each cluster"),
         html.Br(),
         html.H6("coupling inside the clusters"),
@@ -450,7 +450,7 @@ def layout():
             " g_K = ", dcc.Input(id='gK', value="100; 100", type='text', size='15'),
             " V_Na = ", dcc.Input(id='VNa', value="55; 55", type='text', size='15'),
             " V_K = ", dcc.Input(id='VK', value="-85; -85", type='text', size='15'),
-            " V_T = ", dcc.Input(id='VT', value="-58;58", type='text', size='15'),
+            " V_T = ", dcc.Input(id='VT', value="-58;-58", type='text', size='15'),
             " V_S = ", dcc.Input(id='VS', value="-10;-10", type='text', size='15'),
         ], title="Destexhe-Paré parameters"),
         html.Br(),
@@ -526,7 +526,7 @@ def layout():
      State('periodogram_a', 'value'), State('periodogram_b', 'value')
      ]
 )
-def update_output_DPC(n_clicks, n_clusters, n_neurons, epsilon_clusters, coupling_clusters, p_clusters, k_clusters,
+def update_output(n_clicks, n_clusters, n_neurons, epsilon_clusters, coupling_clusters, p_clusters, k_clusters,
                   seed_clusters, epsilon_outer, coupling_outer, p_outer, k_outer, seed_outer, V0_beg, V0_end,
                   m0, h0, n0, mM0, t0, tn, dt, Iext, C_mu, C_sigma, C_a, C_b, gNa, gK, VNa, VK, VT, VS, st_t0_mu, st_t0_sig, st_t0_a, st_t0_b, st_len, st_A_mu, st_A_sig, st_A_a, st_A_b, st_r_mu, st_r_sig,
                   st_r_a, st_r_b, sigma_noise, periodogram_a, periodogram_b):
