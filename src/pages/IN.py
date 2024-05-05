@@ -161,7 +161,10 @@ def euler_maruyama(sigma_noise, X0, T, dt, N_eq, K, params, stimulus):
 
     N = np.floor(T / dt).astype(int)  # pocet kroku
     d = len(X0)  # pocet rovnic v soustave celkem
-    sigma_noise = [sigma_noise / x for x in sqrt(params[0])] + [0] * (d - N_eq)  # sigma_noise + (d-N_eq) nul
+    sigma = []
+    for neuron in range(N_eq):
+        sigma.append(sigma_noise / sqrt(params[0][neuron]))
+    sigma_noise = sigma + [0] * (d - N_eq)
     X = np.zeros((d, N + 1))  # pocet radku: pocet rovnic interneuronu, pocet sloupcu: pocet kroku+1
     X[:, 0] = X0  # prvni sloupec jsou pocatecni podminky
     t = np.arange(0, T + dt, dt)  # cas
