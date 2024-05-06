@@ -1,3 +1,6 @@
+# NEURONAL NETWORK SIMULATION APP - info page, definitions of the models
+# AUTHOR: Markéta Trembaczová, 2024
+
 from dash import html, register_page, dcc
 import dash_bootstrap_components as dbc
 
