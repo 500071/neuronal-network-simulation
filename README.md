@@ -32,7 +32,7 @@
 
 `ML` simulace Morris-Lecar modelu
 
-`IN` simulace modelu interneuronu (HOTOVO - chybí periodogram)
+`IN` simulace modelu interneuronu
 
 `DP` simulace Destexhe-Paré modelu
 
