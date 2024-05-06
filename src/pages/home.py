@@ -1,4 +1,7 @@
-from dash import html, register_page  #, callback # If you need callbacks, import it here.
+# NEURONAL NETWORK SIMULATION APP - home page, info about the website
+# AUTHOR: Markéta Trembaczová, 2024
+
+from dash import html, register_page
 
 register_page(
     __name__,
