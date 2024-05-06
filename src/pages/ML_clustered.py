@@ -1,16 +1,19 @@
-from dash import html, register_page, dcc  #, callback # If you need callbacks, import it here.
+# PAGE FOR MULTIPLE CLUSTER MORRIS-LECAR SIMULATION
+# AUTHOR: Markéta Trembaczová, 2024
+
+from dash import html, register_page, dcc
 from dash import Input, Output, callback, State
-from math import pow, sqrt
+from math import sqrt
 import scipy.integrate as integrate
+from scipy.stats import truncnorm
+from scipy.signal import periodogram, detrend
 import numpy as np
 import random
 import networkx as nx
-from scipy.stats import truncnorm
 import plotly.express as px
 import plotly.graph_objects as go
 import re
-from scipy import signal
-import dash_bootstrap_components as dbc
+
 
 register_page(
     __name__,
@@ -19,11 +22,12 @@ register_page(
     path='/ML_clustered'
 )
 
-######################################################################################################
-# SITE PRO SPRAZENI
 
+######################################################################################################
+# NETWORKS FOR COUPLING
 
 def no_coupling(n):
+    """returns adjacency matrix of a network of n neurons with no coupling"""
     K = []
     for row in range(n):
         line = []
@@ -34,18 +38,23 @@ def no_coupling(n):
 
 
 def small_world(n, k, p, seed):
-    # n..pocet neuronu, k..s kolika neurony je propojen, p..pst prepojeni
+    """ function for INNER COUPLING
+    returns adjacency matrix of a small world network of n neurons, each node is joined with its k nearest neighbors
+    in a ring topology, p is the probability of rewiring each edge"""
     G = nx.watts_strogatz_graph(n, k, p, seed)
     return nx.adjacency_matrix(G).todense()
 
 
 def small_world_outer(n, k, p, seed):
-    np.random.seed(15)
-    # pravidelna struktura
+    """ function for OUTER COUPLING
+    returns adjacency matrix of a small world network of n neurons, each node is joined with its k nearest neighbors
+    in a ring topology, p is the probability of rewiring each edge"""
+    np.random.seed(seed)
+    # regural structure
     K = np.zeros((n, n))
     for i in range(k):
         K = K + np.diag([1] * (n - i), i) + np.diag([1] * i, i - n)
-    # prepojeni
+    # rewiring
     K_random = np.random.random((n, n))
     K_index = np.random.randint(0, n * n, size=(n, n))
     for row in range(n):
@@ -57,7 +66,10 @@ def small_world_outer(n, k, p, seed):
                     K[index // n][index % n] = 1
     return np.asarray(K)
 
+
 def all_to_all(n):
+    """function for INNER COUPLING
+    returns adjacency matrix of an all to all network of n neurons"""
     K = []
     for row in range(n):
         line = []
@@ -71,15 +83,21 @@ def all_to_all(n):
 
 
 def all_to_all_outer(n):
+    """function for OUTER COUPLING
+        returns adjacency matrix of an all to all network of n neurons"""
     return np.ones((n, n))
 
 
 def random_network(n, p, seed):
-    G = nx.erdos_renyi_graph(n, p, seed, directed=False)  # random network
+    """function for INNER COUPLING
+    returns adjacency matrix of a random network of n neurons, p is the probability of edge creation"""
+    G = nx.erdos_renyi_graph(n, p, seed, directed=False)
     return nx.adjacency_matrix(G).todense()
 
 
 def random_network_outer(n, p, seed):
+    """function for OUTER COUPLING
+        returns adjacency matrix of a random network of n neurons, p is the probability of edge creation"""
     np.random.seed(seed)
     K = np.random.random((n, n))
     for row in range(n):
@@ -92,6 +110,8 @@ def random_network_outer(n, p, seed):
 
 
 def ring(n):
+    """function for INNER COUPLING
+    returns adjacency matrix of a ring network of n neurons"""
     if n == 1:
         return np.asarray([[0]])
     K = []
@@ -107,26 +127,33 @@ def ring(n):
 
 
 def ring_outer(n):
+    """function for OUTER COUPLING
+        returns adjacency matrix of a ring network of n neurons"""
     K = np.zeros((n, n))
     K[n-1][0] = 1
     return np.asarray(K)
 
+
 ######################################################################################################
-# MODEL NEURONU
+# MODEL DEFINITION
 
 def morris_lecar(t, variables, params, stimulus):
-    # variables = [Vi, wi]
-    # params = [C, Iext, gK, gCa, gL, VK, VCa, VL, C[neuron]
-    # stimulus = [st_len, st_t0, st_A, st_r]
+    """function for definition of the single morris-lecar neuron, returns increments of the variables [dVi, dhi, dni]
+            # variables = [Vi, wi]
+            # params = [C[neuron], Iext, gK, gCa, gL, VK, VCa, VL]
+            # stimulus = [st_t0[neuron], st_tn[neuron], st_A[neuron], st_r[neuron]]
+            """
 
+    # variables
     Vi = variables[0]
     wi = variables[1]
 
+    # parameters
     C = params[0]
     Iext = params[1]
     A = stimulus[2]
     r = stimulus[3]
-    if stimulus[1] <= t <= stimulus[1] + stimulus[0]:
+    if stimulus[1] <= t <= stimulus[1] + stimulus[0]:  # adds stimulus on given interval
         Iext += A * np.exp(-r * (t - stimulus[1]))
     gK = params[2]
     gCa = params[3]
@@ -141,7 +168,7 @@ def morris_lecar(t, variables, params, stimulus):
     beta4 = 17.4
     phi = 1 / 15
 
-    # function
+    # model definition
     minf = (1 + np.tanh((Vi - beta1) / beta2)) / 2
     winf = (1 + np.tanh((Vi - beta3) / beta4)) / 2
     tauinf = (1 / (phi * np.cosh((Vi - beta3) / (2 * beta4)))) / 2
@@ -153,27 +180,33 @@ def morris_lecar(t, variables, params, stimulus):
 
 
 def coupledML(t, variables, K, n_neurons, n_clusters, params, stimulus):
-    # prvne vsechny V, pak vsechny N
+    """function for adding coupling to the morris-lecar neurons, returns increments of the variables [dVi, wi]
+        # variables = [Vi, wi]
+        # params = [C, Iext, gK, gCa, gL, VK, VCa, VL], all the parameters are lists with values for each cluster
+        # stimulus = [st_t0, st_tn, st_A, st_r], all the parameters are lists with values for each cluster
+        """
 
     Vi = variables[:n_neurons*n_clusters]
-    wi = variables[n_neurons*n_clusters:]
+
     dV = []
     dw = []
 
+    # computes the increment for each single neuron
     for cluster in range(n_clusters):
         for neuron in range(n_neurons):
-            params_neuron = [params[0][cluster][neuron]] # odpovidajici C
-            for index in range(1, 8): #C, Iext, gK, gCa, gL, VK, VCa, VL
+            params_neuron = [params[0][cluster][neuron]]  # correct value of C for each neuron
+            for index in range(1, 8):  # correct values of parameters for each neuron
                 params_neuron.append(params[index][cluster])
-            stimulus_neuron = [stimulus[0][cluster]] # odpovidajici delka stimulu
+            stimulus_neuron = [stimulus[0][cluster]]  # correct length of stimulus for each neuron
             for index in range(1, 4):
-                stimulus_neuron.append(stimulus[index][cluster][neuron])
+                stimulus_neuron.append(stimulus[index][cluster][neuron])  # correct values of stimulus for each neuron
             dVar = morris_lecar(t, [variables[neuron + cluster * n_neurons],
-                                   variables[neuron + n_neurons * (n_clusters + cluster)]],
-                               params_neuron, stimulus_neuron)
+                                    variables[neuron + n_neurons * (n_clusters + cluster)]],
+                                params_neuron, stimulus_neuron)
             dV.append(dVar[0])
             dw.append(dVar[1])
 
+    # adds coupling
     for row in range(n_neurons * n_clusters):
         for col in range(n_neurons * n_clusters):
             dV[row] += (Vi[col] - Vi[row]) * K[row][col] / params[0][row % n_clusters][row // n_clusters]
@@ -181,45 +214,48 @@ def coupledML(t, variables, K, n_neurons, n_clusters, params, stimulus):
     dV.extend(dw)
     return dV
 
+
 ######################################################################################################
 # EULER-MARUYAMA METODA
 
 def euler_maruyama(sigma_noise, X0, T, dt, n_neurons, n_clusters, K, params, stimulus):
-    # dX =  f(X) dt + sigma dW
-    # f...drift function (fce interneuron s parametry)
-    # sigma_noise = sigma_noise / C
-    # X0... pocatecni podminky
-    # T... delka casoveho intervalu
-    # dt... krok
-    # N_eq... pocet neuronu
-    #params = [C, Iext, gNa, gK, VNa, VK, C[0]]
-    N_eq = n_neurons*n_clusters
+    """function for the Euler-Maruyama numeric method, returns solution and the time vector.
+        dX =  f(X) dt + sigma dW
+        sigma_noise is the standard deviation of the noised input, X0 are the initial conditions, T is the length of
+        the time interval and dt is the time step, n_clusters is the number of clusters, n_neurons is the number of
+        neurons in each cluster and K is the adjacency matrix of the network.
+        params = [C, Iext, gK, gCa, gL, VK, VCa, VL]
+        stimulus = [st_t0, st_tn, st_A, st_r]
+    """
 
-    N = np.floor(T/dt).astype(int) # pocet kroku
-    d = len(X0) # pocet rovnic v soustave celkem
+    N_eq = n_neurons*n_clusters  # number of all the neurons in the system
+    N = np.floor(T/dt).astype(int)  # number of steps
+    d = len(X0)  # number of differential equations
     sigma = []
     for cluster in range(n_clusters):
         for neuron in range(n_neurons):
-            sigma.append(sigma_noise / sqrt(params[0][cluster][neuron]))
-    sigma_noise = sigma + [0] * (d - N_eq)  # sigma_noise + (d-N_eq) nul
+            sigma.append(sigma_noise / sqrt(params[0][cluster][neuron]))  # sigma_noise/sqrt(C_i)
+    sigma_noise = sigma + [0] * (d - N_eq)
+    X = np.zeros((d, N + 1))
+    X[:, 0] = X0
+    t = np.arange(0, T+dt, dt)
+    dW = np.vstack([np.sqrt(dt) * np.random.randn(N_eq, N),  # increments of Wiener's process
+                    np.zeros((d - N_eq, N))])
 
-    X = np.zeros((d, N + 1)) # pocet radku: pocet rovnic interneuronu, pocet sloupcu: pocet kroku+1
-    X[:, 0] = X0 # prvni sloupec jsou pocatecni podminky
-    t = np.arange(0, T+dt, dt)  #cas
-    dW = np.vstack([np.sqrt(dt) * np.random.randn(N_eq, N), np.zeros((d - N_eq, N))]) # prvni radek prirustky Wienerova procesu, pak nuly
-
-    for step in range(N): #pres vsechny kroky
+    for step in range(N):
         neuron = coupledML(t[step], X[:, step], K, n_neurons, n_clusters, params, stimulus)
         for i in range(len(neuron)):
-            neuron[i] = neuron[i] * dt
-        X[:, step + 1] += X[:, step] + neuron + sigma_noise * dW[:, step]
+            neuron[i] = neuron[i] * dt  # multiply the solution without noise by the time step
+        X[:, step + 1] += X[:, step] + neuron + sigma_noise * dW[:, step]  # EM method
     return X, t
 
 
 ######################################################################################################
-# NACITANI DAT
+# PARSERS
 
 def input_parser(input_string, n, integer=False):
+    """parser for sting inputs of the variables
+       input: 'a; b; c', output: [a, b, c]"""
     res = input_string.replace(',', '.').split(";")
     if len(res) != n:
         return "input error"
@@ -235,6 +271,8 @@ def input_parser(input_string, n, integer=False):
 
 
 def matrix_input_parser(input_string, n_clusters, integer=False):
+    """parser for sting inputs of the variables in the form of matrices
+           input: '[a;b]; [c; d]', output: [[a,b]; [c, d]]"""
     input_string = input_string.replace(',', '.')
     input_string = input_string.replace('X', '0')
     pattern = r'\[([^]]+)\]'
@@ -252,7 +290,9 @@ def matrix_input_parser(input_string, n_clusters, integer=False):
 
 
 def generate_K(coupling_type, n, k, p, seed):
-    # 1: no coupling, 2: all to all, 3: smallworld, 4: random network, 5: ring
+    """function for generating the inner coupling matrices
+        1: no coupling, 2: all to all, 3: smallworld, 4: random network, 5: ring
+    """
     if coupling_type == 2:
         K = all_to_all(n)
     elif coupling_type == 3:
@@ -265,7 +305,11 @@ def generate_K(coupling_type, n, k, p, seed):
         K = no_coupling(n)
     return K
 
+
 def generate_outer_K(coupling_type, n, k, p, seed, loc):
+    """function for generating the outer coupling matrices
+            1: no coupling, 2: all to all, 3: smallworld, 4: random network, 5: ring
+        """
     if coupling_type == 2:
         K = all_to_all_outer(n)
     elif coupling_type == 3:
@@ -282,13 +326,14 @@ def generate_outer_K(coupling_type, n, k, p, seed, loc):
     else:
         return np.transpose(K)
 
+
 ######################################################################################################
 # TRUNCATED NORMAL DISTRIBUTION
 
-
 def random_truncnorm(a, b, mu, sigma, n):
+    """returns n numbers from truncated normal distribution TN(mu, sigma, a, b)"""
     if sigma == 0:
-        if n==1:
+        if n == 1:
             return [mu]
         else:
             return [mu] * n
@@ -296,10 +341,9 @@ def random_truncnorm(a, b, mu, sigma, n):
     b = (b + mu) / sigma
     return list(truncnorm.rvs(a, b, loc=mu, scale=sigma, size=n))
 
+
 ######################################################################################################
 # LAYOUT
-
-
 
 def layout():
     layout = html.Div([
@@ -319,7 +363,7 @@ def layout():
         html.Div([
             html.Div([
                 " epsilon = ", dcc.Input(id='eps_clusters', value="0.001; 0.001", type='text', size='15'), " ",
-            ], title="coupling strenght"),
+            ], title="coupling strength"),
             html.Span(' ', style={'display': 'inline-block', 'width': '10px'}),
             html.Div([
                 " coupling = ", dcc.Input(id='coupling_clusters', value="2; 2", type='text', size='15'),
@@ -344,7 +388,7 @@ def layout():
         html.Div([
             html.Div([
                 " epsilon = ", dcc.Input(id='eps_outer', value="[X;0.0002]; [0.0002;X]", type='text', size='40'), " ",
-            ], title="coupling strenght"),
+            ], title="coupling strength"),
             html.Span(' ', style={'display': 'inline-block', 'width': '10px'}),
             html.Div([
                 " coupling = ", dcc.Input(id='coupling_outer', value="[X;2]; [2;X]", type='text', size='20'),
@@ -402,7 +446,8 @@ def layout():
                 " σ = ", dcc.Input(id='C_sigma', value="0.003; 0.003", type='text', size='15'),
                 " [ ", dcc.Input(id='C_a', value="0.91; 0.91", type='text', size='15'),
                 ", ", dcc.Input(id='C_b', value="1.09; 1.09", type='text', size='15'), " ])",
-            ], title="membrane capacitance, random from truncated normal distribution with given parameters for each neuron"),
+            ], title="membrane capacitance, random from truncated normal distribution with given parameters for each"
+                     " neuron"),
         ], style=dict(display='flex')),
         html.Br(),
         html.Div([
@@ -424,7 +469,8 @@ def layout():
                 " σ = ", dcc.Input(id='st_t0_sigma', value="0; 0", type='text', size='15'),
                 " [ ", dcc.Input(id='st_t0_a', value="0; 0", type='text', size='15'),
                 ", ", dcc.Input(id='st_t0_b', value="0; 0", type='text', size='15'), " ])",
-            ], title="start of the stimulus, random from truncated normal distribution with given parameters for each neuron"),
+            ], title="start of the stimulus, random from truncated normal distribution with given parameters for "
+                     "each neuron"),
             html.Span(' ', style={'display': 'inline-block', 'width': '10px'}),
             html.Div([
                 "T_st = ", dcc.Input(id='st_tn', value="0; 0", type='text', size='15')
@@ -439,7 +485,8 @@ def layout():
                 " σ = ", dcc.Input(id='st_A_sigma', value="0; 0", type='text', size='10'),
                 " [ ", dcc.Input(id='st_A_a', value="0; 0", type='text', size='10'),
                 ", ", dcc.Input(id='st_A_b', value="0; 0", type='text', size='10'), " ])",
-            ], title="amplitude of the stimulus, random from truncated normal distribution with given parameters for each neuron"),
+            ], title="amplitude of the stimulus, random from truncated normal distribution with given parameters for"
+                     " each neuron"),
             html.Span(' ', style={'display': 'inline-block', 'width': '10px'}),
             html.Div([
                 "r ∼ TN(",
@@ -447,7 +494,8 @@ def layout():
                 " σ = ", dcc.Input(id='st_r_sigma', value="0; 0", type='text', size='10'),
                 " [ ", dcc.Input(id='st_r_a', value="0; 0", type='text', size='10'),
                 ", ", dcc.Input(id='st_r_b', value="0; 0", type='text', size='10'), " ])",
-            ], title=" damping rate of the stimulus, random from truncated normal distribution with given parameters for each neuron"),
+            ], title=" damping rate of the stimulus, random from truncated normal distribution with given parameters"
+                     " for each neuron"),
         ], style=dict(display='flex')),
         html.Br(),
 
@@ -465,6 +513,7 @@ def layout():
     ], style={'margin-left': '110px'})
     return layout
 
+
 ######################################################################################################
 # CALLBACK
 
@@ -473,68 +522,58 @@ def layout():
     Input('button_MLC', 'n_clicks'),
     [State('n_clusters', 'value'), State('n_neurons', 'value'), State('eps_clusters', 'value'),
      State('coupling_clusters', 'value'), State('p_clusters', 'value'), State('k_clusters', 'value'),
-     State('seed_clusters', 'value'),
-     State('eps_outer', 'value'), State('coupling_outer', 'value'), State('p_outer', 'value'),
-     State('k_outer', 'value'), State('seed_outer', 'value'), State('V0beg', 'value'), State('V0end', 'value'),
-     State('w0', 'value'), State('t0', 'value'), State('tn', 'value'), State('dt', 'value'),
+     State('seed_clusters', 'value'), State('eps_outer', 'value'), State('coupling_outer', 'value'),
+     State('p_outer', 'value'), State('k_outer', 'value'), State('seed_outer', 'value'), State('V0beg', 'value'),
+     State('V0end', 'value'), State('w0', 'value'), State('t0', 'value'), State('tn', 'value'), State('dt', 'value'),
      State('Iext', 'value'), State('C_mu', 'value'), State('C_sigma', 'value'), State('C_a', 'value'),
-     State('C_b', 'value'),
-     State('gK', 'value'), State('gCa', 'value'), State('gL', 'value'), State('VK', 'value'), State('VCa', 'value'), State('VL', 'value'),
-     State('st_t0', 'value'), State('st_t0_sigma', 'value'), State('st_t0_a', 'value'),
-     State('st_t0_b', 'value'), State('st_tn', 'value'), State('st_A', 'value'), State('st_A_sigma', 'value'),
-     State('st_A_a', 'value'), State('st_A_b', 'value'), State('st_r', 'value'), State('st_r_sigma', 'value'),
-     State('st_r_a', 'value'), State('st_r_b', 'value'), State('sigma_noise', 'value'),
+     State('C_b', 'value'), State('gK', 'value'), State('gCa', 'value'), State('gL', 'value'), State('VK', 'value'),
+     State('VCa', 'value'), State('VL', 'value'), State('st_t0', 'value'), State('st_t0_sigma', 'value'),
+     State('st_t0_a', 'value'), State('st_t0_b', 'value'), State('st_tn', 'value'), State('st_A', 'value'),
+     State('st_A_sigma', 'value'), State('st_A_a', 'value'), State('st_A_b', 'value'), State('st_r', 'value'),
+     State('st_r_sigma', 'value'), State('st_r_a', 'value'), State('st_r_b', 'value'), State('sigma_noise', 'value'),
      State('periodogram_a', 'value'), State('periodogram_b', 'value')
      ]
 )
 def update_output(n_clicks, n_clusters, n_neurons, epsilon_clusters, coupling_clusters, p_clusters, k_clusters,
-                      seed_clusters, epsilon_outer, coupling_outer, p_outer, k_outer, seed_outer, V0_beg, V0_end,
-                      w0, t0, tn, dt, Iext, C_mu, C_sigma, C_a, C_b, gK, gCa, gL, VK, VCa, VL, st_t0_mu,
-                      st_t0_sig, st_t0_a, st_t0_b, st_len, st_A_mu, st_A_sig, st_A_a, st_A_b, st_r_mu, st_r_sig,
-                      st_r_a, st_r_b, sigma_noise, periodogram_a, periodogram_b
-                      ):
+                  seed_clusters, epsilon_outer, coupling_outer, p_outer, k_outer, seed_outer, V0_beg, V0_end, w0, t0,
+                  tn, dt, Iext, C_mu, C_sigma, C_a, C_b, gK, gCa, gL, VK, VCa, VL, st_t0_mu, st_t0_sig, st_t0_a,
+                  st_t0_b, st_len, st_A_mu, st_A_sig, st_A_a, st_A_b, st_r_mu, st_r_sig, st_r_a, st_r_b, sigma_noise,
+                  periodogram_a, periodogram_b):
     if n_clicks > 0:
-        # DIAGONALA
+        # COUPLING PARAMETERS - DIAGONAL
         epsilon_clusters = input_parser(epsilon_clusters, n_clusters)
         coupling_clusters = input_parser(coupling_clusters, n_clusters, integer=True)
         k_clusters = input_parser(k_clusters, n_clusters, integer=True)
         p_clusters = input_parser(p_clusters, n_clusters)
         seed_clusters = input_parser(seed_clusters, n_clusters, integer=True)
 
-        #if any(str(param) == "input error" for param in
-        #       [epsilon_clusters, coupling_clusters, k_clusters, p_clusters, seed_clusters]):
-        #    return dbc.Alert("Input error!", color="danger")
-
-        # TROJUHELNIKY
+        # COUPLING PARAMETERS - OTHER
         epsilon = matrix_input_parser(epsilon_outer, n_clusters)
         coupling = matrix_input_parser(coupling_outer, n_clusters, integer=True)
         k = matrix_input_parser(k_outer, n_clusters, integer=True)
         p = matrix_input_parser(p_outer, n_clusters)
         seed = matrix_input_parser(seed_outer, n_clusters, integer=True)
 
-        #if any(str(param) == "input error" for param in [epsilon, coupling, k, p, seed]):
-        #    return dbc.Alert("Input error!", color="danger")
-
-        # MATICE VSECH PROMENNYCH
+        # COUPLING PARAMETERS
         np.fill_diagonal(epsilon, epsilon_clusters)
         np.fill_diagonal(coupling, coupling_clusters)
         np.fill_diagonal(k, k_clusters)
         np.fill_diagonal(p, p_clusters)
         np.fill_diagonal(seed, seed_clusters)
 
-        # VYPOCET MATICE K
+        # GENERATE COUPLING MATRIX K
         K_list = []
         for row in range(n_clusters):
             line = []
             for col in range(n_clusters):
-                if row == col:
+                if row == col:  # diagonal
                     K = epsilon[row][col] * \
                         generate_K(coupling[row][col], n_neurons, k[row][col], p[row][col], int(seed[row][col]))
-                elif row < col:
+                elif row < col:  # upper triangle
                     K = epsilon[row][col] * \
                         generate_outer_K(coupling[row][col], n_neurons, k[row][col], p[row][col], int(seed[row][col]),
                                          "U")
-                else:
+                else:  # lower triangle
                     K = epsilon[row][col] * \
                         generate_outer_K(coupling[row][col], n_neurons, k[row][col], p[row][col], int(seed[row][col]),
                                          "L")
@@ -542,7 +581,7 @@ def update_output(n_clicks, n_clusters, n_neurons, epsilon_clusters, coupling_cl
             K_list.append(line)
         K = np.concatenate([np.concatenate(row, axis=1) for row in K_list], axis=0)
 
-        # POCATECNI PODMINKY
+        # INITIAL CONDITIONS
         V0_beg = input_parser(V0_beg, n_clusters)
         V0_end = input_parser(V0_end, n_clusters)
         w0_input = input_parser(w0, n_clusters)
@@ -554,7 +593,7 @@ def update_output(n_clicks, n_clusters, n_neurons, epsilon_clusters, coupling_cl
                 w0.append(w0_input[cluster])
         y0 = np.asarray(V0 + w0)
 
-        # VOLBA PARAMETRU
+        # PARAMETERS
         Iext = input_parser(Iext, n_clusters)
         C_mu = input_parser(C_mu, n_clusters)
         C_sigma = input_parser(C_sigma, n_clusters)
@@ -574,7 +613,6 @@ def update_output(n_clicks, n_clusters, n_neurons, epsilon_clusters, coupling_cl
         params = [C, Iext, gK, gCa, gL, VK, VCa, VL]
 
         # STIMULUS
-
         st_len = input_parser(st_len, n_clusters)
 
         st_t0_mu = input_parser(st_t0_mu, n_clusters)
@@ -607,8 +645,8 @@ def update_output(n_clicks, n_clusters, n_neurons, epsilon_clusters, coupling_cl
         stimulus = [st_len, st_t0, st_A, st_r]
 
         ######################################################################################################
-        # RESENI
-        if sigma_noise == 0:
+        # SOLUTION
+        if sigma_noise == 0:  # standard deviation of the added noise
             # using Runge Kutta 45
             res = integrate.solve_ivp(coupledML, [t0, tn], y0, method='RK45',
                                       args=[K, n_neurons, n_clusters, params, stimulus])
@@ -621,20 +659,14 @@ def update_output(n_clicks, n_clusters, n_neurons, epsilon_clusters, coupling_cl
         ######################################################################################################
         # VISUALIZATIONS
 
-        # VYPOCTY PRO VIZUALIZACI
+        # COMPUTATIONS FOR VISUALIZATIONS
         Vsum = []
         for i in range(len(V[0])):
             Vsum.append(0)
             for neuron in range(n_neurons * n_clusters):
                 Vsum[i] += V[neuron][i]
 
-        ymin = min(Vsum)
-        ymax = max(Vsum)
-        for neuron in range(n_neurons * n_clusters):
-            ymin = min(ymin, min(V[neuron]))
-            ymax = max(ymax, max(V[neuron]))
-
-        # NEURONY SAMOSTATNE
+        # SINGLE NEURONS
         colors = px.colors.qualitative.Plotly
         cluster = []
         for i in range(n_clusters):
@@ -644,11 +676,10 @@ def update_output(n_clicks, n_clusters, n_neurons, epsilon_clusters, coupling_cl
         for neuron in range(n_neurons * n_clusters):
             fig_single.add_scatter(x=T, y=V[neuron], mode='lines',
                                    line=dict(color=colors[cluster[neuron] % len(colors)]), showlegend=False)
-            # fig_single.add_trace(px.line(x=T, y=V[neuron], line_color=colors[neuron % len(colors)]).data[0],)
         fig_single.update_xaxes(title_text='t [ms]')
         fig_single.update_yaxes(title_text='V_i [mV]')
 
-        # SOUCET NEURONU
+        # SUM OF THE NEURONS
         fig_sum = px.line(y=Vsum, x=T, title='Sum of coupled the neurons')
         fig_sum.update_xaxes(title_text='t [ms]')
         fig_sum.update_yaxes(title_text='V [mV]')
@@ -659,21 +690,21 @@ def update_output(n_clicks, n_clusters, n_neurons, epsilon_clusters, coupling_cl
             if periodogram_a <= T[index] <= periodogram_b:
                 V_periodogram.append(Vsum[index])
         fs = 1000 * len(V_periodogram) / tn
-        f, Pxx = signal.periodogram(signal.detrend(V_periodogram), fs)
-        kernel = np.array([1, 1, 1]) / 3  # Define the smoothing kernel
+        f, Pxx = periodogram(detrend(V_periodogram), fs)
+        kernel = np.array([1, 1, 1]) / 3
         smoothed_Pxx = np.convolve(Pxx, kernel, mode='same')
         f_smoothed = f[:len(smoothed_Pxx)]
         limit = 2000
-        treshold = 0.1
+        threshold = 0.1
         for i in range(round(limit / 2), len(f_smoothed)):
-            if smoothed_Pxx[i] > treshold:
+            if smoothed_Pxx[i] > threshold:
                 limit = i * 5 + 100
         fig_periodogram = px.line(y=smoothed_Pxx, x=f_smoothed, title='Periodogram')
         fig_periodogram.update_layout(xaxis_range=[0, limit])
         fig_periodogram.update_xaxes(title_text='frequency [Hz]')
         fig_periodogram.update_yaxes(title_text='|P(f)|')
 
-        # VIZUALIZACE SITE
+        # NETWORK VISUALIZATION
         fig_K = go.Figure(data=go.Heatmap(
             z=K,
             colorscale="purples",
