@@ -1,3 +1,6 @@
+# NEURONAL NETWORK SIMULATION APP - navbar definition
+# AUTHOR: Markéta Trembaczová, 2024
+
 import dash_bootstrap_components as dbc
 
 
