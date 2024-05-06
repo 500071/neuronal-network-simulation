@@ -10,22 +10,19 @@
 
 **Modely neuronů**
 
-Všechny mají jako výstup graf napětí na čase (spřažené v součtu i jednotlivé) a periodogram
-Všechny používájí Runge Kutta 45, Euler-Maruyama bude další krok.
-
-`interneuron_1` simulace jednoho interneuronu
-
 `interneuron_coupled` simulace n spřažených interneuronů
 
-`interneuron_coupled_clustered` simulace n spřažených interneuronů ve shlucích **TODO**
+`interneuron_coupled_clustered` simulace n spřažených interneuronů ve shlucích
 
-`ML_coupled` simulace n spřažených Morris-Lecar modelů
+`ML_coupled` simulace n spřažených ML neuronů
 
-`DP_1` simulace jednoho DP neuronu
+`ML_coupled_clustered` simulace n spřažených ML neuronů ve shlucích
 
 `DP_coupled` simulace n spřažených DP neuronů
 
-**Webová aplikace**
+`DP_coupled_clustered` simulace n spřažených DP neuronů ve shlucích
+
+**Webová aplikace - složka src**
 
 `app` kostra pro webové rozhraní
 
