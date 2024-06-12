@@ -619,7 +619,7 @@ def update_output(n_clicks, n_clusters, n_neurons, epsilon_clusters, coupling_cl
         gK = input_parser(gK, n_clusters)
         VNa = input_parser(VNa, n_clusters)
         VK = input_parser(VK, n_clusters)
-        params = np.array([C, Iext, gNa, gK, VNa, VK])
+        params = [C, Iext, gNa, gK, VNa, VK]
 
         # STIMULUS
         st_len = input_parser(st_len, n_clusters)
